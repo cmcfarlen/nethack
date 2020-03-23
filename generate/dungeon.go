@@ -1,5 +1,7 @@
 package generate
 
+// https://dirkkok.wordpress.com/dungeon-generation-article-series/
+
 import (
 	"fmt"
 	"math"
@@ -17,9 +19,15 @@ type (
 		north, south, east, west sideType
 	}
 
+	Map struct {
+		Width, Height int
+		data          []rune
+	}
+
 	Dungeon struct {
-		width, height int
+		Width, Height int
 		tiles         []tile
+		M             Map
 	}
 
 	DungeonGenerator struct {
@@ -63,6 +71,13 @@ const (
 	moveEast
 )
 
+func (m *Map) RuneAt(x, y int) rune {
+	if x >= 0 && x < m.Width && y >= 0 && y < m.Height {
+		return m.data[x*m.Width+y]
+	}
+	return 0
+}
+
 func newDirectionPicker() *directionPicker {
 	dirs := [4]moveDirection{}
 
@@ -84,10 +99,10 @@ func (p *directionPicker) nextDirection() moveDirection {
 }
 
 func newDungeon(w, h int) *Dungeon {
-	d := Dungeon{w, h, make([]tile, w*h)}
+	d := Dungeon{w, h, make([]tile, w*h), Map{}}
 
-	for x := 0; x < d.width; x++ {
-		for y := 0; y < d.height; y++ {
+	for x := 0; x < d.Width; x++ {
+		for y := 0; y < d.Height; y++ {
 			t := d.tileAt(x, y)
 			t.x = x
 			t.y = y
@@ -135,22 +150,22 @@ func (t *tile) deadEndDirection() moveDirection {
 }
 
 func (d *Dungeon) visitAllTiles(f func(*tile)) {
-	for x := 0; x < d.width; x++ {
-		for y := 0; y < d.height; y++ {
+	for x := 0; x < d.Width; x++ {
+		for y := 0; y < d.Height; y++ {
 			f(d.tileAt(x, y))
 		}
 	}
 }
 
 func (d *Dungeon) randomXY() (x, y int) {
-	x = rand.Intn(d.width)
-	y = rand.Intn(d.height)
+	x = rand.Intn(d.Width)
+	y = rand.Intn(d.Height)
 	return
 }
 
 func (d *Dungeon) tileAt(x, y int) *tile {
-	if x >= 0 && x < d.width && y >= 0 && y < d.height {
-		return &d.tiles[x*d.width+y]
+	if x >= 0 && x < d.Width && y >= 0 && y < d.Height {
+		return &d.tiles[y*d.Height+x]
 	}
 	return nil
 }
@@ -185,7 +200,7 @@ func (d *Dungeon) moveTile(t *tile, md moveDirection) *tile {
 func (d *Dungeon) tileInDirection(t *tile, md moveDirection) *tile {
 	x, y := move(t.x, t.y, md)
 
-	if x >= 0 && x < d.width && y >= 0 && y < d.height {
+	if x >= 0 && x < d.Width && y >= 0 && y < d.Height {
 		return d.tileAt(x, y)
 	}
 	return nil
@@ -220,9 +235,9 @@ func pickValidDirection(d *Dungeon, t *tile) (moveDirection, bool) {
 	return moveNorth, false
 }
 
-func (d *Dungeon) PrintDungeon() {
-	mw := d.width*2 + 1
-	mh := d.height*2 + 1
+func (d *Dungeon) updateMap() {
+	mw := d.Width*2 + 1
+	mh := d.Height*2 + 1
 	m := make([]rune, mw*mh)
 	ttom := func(x, y int) (int, int) {
 		return x*2 + 1, y*2 + 1
@@ -235,8 +250,8 @@ func (d *Dungeon) PrintDungeon() {
 		m[i] = '#'
 	}
 
-	for x := 0; x < d.width; x++ {
-		for y := 0; y < d.height; y++ {
+	for x := 0; x < d.Width; x++ {
+		for y := 0; y < d.Height; y++ {
 			t := d.tileAt(x, y)
 			mx, my := ttom(x, y)
 
@@ -294,9 +309,15 @@ func (d *Dungeon) PrintDungeon() {
 		}
 	}
 
-	for x := 0; x < mw; x++ {
-		for y := 0; y < mh; y++ {
-			fmt.Print(string(m[y*mw+x]))
+	d.M.data = m
+	d.M.Width = mw
+	d.M.Height = mh
+}
+
+func (m *Map) PrintMap() {
+	for x := 0; x < m.Width; x++ {
+		for y := 0; y < m.Height; y++ {
+			fmt.Print(string(m.data[y*m.Width+x]))
 		}
 		fmt.Println("")
 	}
@@ -329,8 +350,8 @@ func (d *Dungeon) createCorridor(from *tile, to *tile, dir moveDirection) {
 func (d *Dungeon) deadEndTiles() []*tile {
 	det := make([]*tile, 0)
 
-	for x := 0; x < d.width; x++ {
-		for y := 0; y < d.height; y++ {
+	for x := 0; x < d.Width; x++ {
+		for y := 0; y < d.Height; y++ {
 			t := d.tileAt(x, y)
 
 			if t.isDeadEnd() {
@@ -378,8 +399,8 @@ func (d *Dungeon) adjacentTiles(t *tile) []*tile {
 
 func (d *Dungeon) scoreRoom(startx, starty int, rw, rh int) int {
 
-	if (startx+rw) >= d.width ||
-		(starty+rh) >= d.height {
+	if (startx+rw) >= d.Width ||
+		(starty+rh) >= d.Height {
 		return math.MaxInt32
 	}
 
@@ -455,7 +476,7 @@ func GenerateDungeon(opts GenerateOpts) *Dungeon {
 		visited[current] = true
 	}
 
-	removeCount := int(math.Ceil(float64(d.width) * float64(d.height) * float64(opts.Sparseness) / 100.0))
+	removeCount := int(math.Ceil(float64(d.Width) * float64(d.Height) * float64(opts.Sparseness) / 100.0))
 
 	for removeCount > 0 {
 		det := d.deadEndTiles()
@@ -474,17 +495,6 @@ func GenerateDungeon(opts GenerateOpts) *Dungeon {
 		removeCount -= len(det)
 	}
 
-	for s := 0; s < opts.Sparseness; s++ {
-		for x := 0; x < d.width; x++ {
-			for y := 0; y < d.height; y++ {
-				t := d.tileAt(x, y)
-
-				if t.isDeadEnd() {
-				}
-			}
-		}
-	}
-
 	for r := 0; r < opts.RoomCount; r++ {
 		roomWidth := randomBetween(opts.RoomMin, opts.RoomMax)
 		roomHeight := randomBetween(opts.RoomMin, opts.RoomMax)
@@ -493,8 +503,8 @@ func GenerateDungeon(opts GenerateOpts) *Dungeon {
 		bestx := 0
 		besty := 0
 
-		for x := 0; x < d.width; x++ {
-			for y := 0; y < d.height; y++ {
+		for x := 0; x < d.Width; x++ {
+			for y := 0; y < d.Height; y++ {
 				score := d.scoreRoom(x, y, roomWidth, roomHeight)
 				if score < bestScore {
 					bestScore = score
@@ -523,10 +533,11 @@ func GenerateDungeon(opts GenerateOpts) *Dungeon {
 						t.south = sideTypeEmpty
 					}
 				}
-
 			}
 		}
 	}
+
+	d.updateMap()
 
 	return d
 }
