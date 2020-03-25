@@ -19,24 +19,35 @@ type (
 		north, south, east, west sideType
 	}
 
+	// Map is a map
 	Map struct {
 		Width, Height int
 		data          []rune
 	}
 
+	// Room is for holding things
+	Room struct {
+		X, Y          int
+		Width, Height int
+	}
+
+	// Dungeon is a dungeon with tiles and rooms and a map
 	Dungeon struct {
 		Width, Height int
 		tiles         []tile
+		Rooms         []Room
 		M             Map
 	}
 
+	// DungeonGenerator generates dungeons
 	DungeonGenerator struct {
 		d            *Dungeon
 		currentTile  *tile
 		visitedTiles []tile
 	}
 
-	GenerateOpts struct {
+	// Opts are options for generating a dungeon
+	Opts struct {
 		Width, Height     int
 		Sparseness        int
 		DirectionModifier int
@@ -71,11 +82,18 @@ const (
 	moveEast
 )
 
+// RuneAt reeturns the rune at the point x, y
 func (m *Map) RuneAt(x, y int) rune {
 	if x >= 0 && x < m.Width && y >= 0 && y < m.Height {
 		return m.data[x*m.Width+y]
 	}
 	return 0
+}
+
+// IsWalkable returns true if x, y is walkable
+func (m *Map) IsWalkable(x, y int) bool {
+	r := m.RuneAt(x, y)
+	return r == ' ' || r == '.'
 }
 
 func newDirectionPicker() *directionPicker {
@@ -98,8 +116,8 @@ func (p *directionPicker) nextDirection() moveDirection {
 	return nd
 }
 
-func newDungeon(w, h int) *Dungeon {
-	d := Dungeon{w, h, make([]tile, w*h), Map{}}
+func newDungeon(w, h, roomCount int) *Dungeon {
+	d := Dungeon{w, h, make([]tile, w*h), make([]Room, roomCount), Map{}}
 
 	for x := 0; x < d.Width; x++ {
 		for y := 0; y < d.Height; y++ {
@@ -433,8 +451,8 @@ func (d *Dungeon) scoreRoom(startx, starty int, rw, rh int) int {
 	return score
 }
 
-func GenerateDungeon(opts GenerateOpts) *Dungeon {
-	d := newDungeon(opts.Width, opts.Height)
+func GenerateDungeon(opts Opts) *Dungeon {
+	d := newDungeon(opts.Width, opts.Height, opts.RoomCount)
 	tileCount := opts.Width * opts.Height
 	visited := make(map[*tile]bool)
 
@@ -535,6 +553,11 @@ func GenerateDungeon(opts GenerateOpts) *Dungeon {
 				}
 			}
 		}
+
+		d.Rooms[r].X = bestx
+		d.Rooms[r].Y = besty
+		d.Rooms[r].Width = roomWidth
+		d.Rooms[r].Height = roomHeight
 	}
 
 	d.updateMap()
