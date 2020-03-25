@@ -68,29 +68,30 @@ type World struct {
 }
 
 func UpdateMonster(w *World, m *Monster) {
-	m.V = randomDirection()
-	m.P = clampZeroToV(add(m.P, m.V), w.currentFloor.Width, w.currentFloor.Height)
-}
-
-/*
-func main() {
-
-	rand.Seed(time.Now().Unix())
-	opts := generate.GenerateOpts{
-		Width:             20,
-		Height:            20,
-		Sparseness:        70,
-		DirectionModifier: 20,
-		RoomCount:         4,
-		RoomMin:           3,
-		RoomMax:           7,
+	if rand.Float32() < 0.4 {
+		m.V = randomDirection()
 	}
-	d := generate.GenerateDungeon(opts)
-
-	d.PrintDungeon()
+	if rand.Float32() < 0.8 {
+		m.P.x, m.P.y = moveIfValid(m.P.x, m.P.y, m.V.x, m.V.y, &w.currentFloor.M)
+	}
 }
 
-*/
+func moveIfValid(x, y, dx, dy int, m *generate.Map) (int, int) {
+	nx, ny := x+dx, y+dy
+
+	if m.IsWalkable(nx, ny) {
+		return nx, ny
+	}
+	return x, y
+}
+
+func randomWalkablePoint(m *generate.Map) (int, int) {
+	x, y := rand.Intn(m.Width), rand.Intn(m.Height)
+	for !m.IsWalkable(x, y) {
+		x, y = rand.Intn(m.Width), rand.Intn(m.Height)
+	}
+	return x, y
+}
 
 func main() {
 	// Initialize gc. It's essential End() is called to ensure the
@@ -112,7 +113,7 @@ func main() {
 	stdscr.Print("Press a key...")
 	stdscr.Refresh()
 
-	opts := generate.GenerateOpts{
+	opts := generate.Opts{
 		Width:             20,
 		Height:            20,
 		Sparseness:        70,
@@ -125,12 +126,10 @@ func main() {
 	w := &World{}
 	w.currentFloor = generate.GenerateDungeon(opts)
 
-	height, width := w.currentFloor.M.Height, w.currentFloor.M.Width
-
-	px := width / 2
-	py := height / 2
+	px, py := randomWalkablePoint(&w.currentFloor.M)
 
 	m := Monster{gc.Char('M'), Vector{}, Vector{}}
+	m.P.x, m.P.y = randomWalkablePoint(&w.currentFloor.M)
 
 	keepGoing := true
 	for keepGoing {
@@ -141,9 +140,7 @@ func main() {
 
 		for x := 0; x < d.M.Width; x = x + 1 {
 			for y := 0; y < d.M.Height; y = y + 1 {
-
 				stdscr.MoveAddChar(y, x, gc.Char(d.M.RuneAt(x, y)))
-
 			}
 		}
 
@@ -151,8 +148,6 @@ func main() {
 		UpdateMonster(w, &m)
 
 		stdscr.MoveAddChar(m.P.y, m.P.x, m.Symbol)
-
-		stdscr.MovePrintf(height, 0, "Fooo %v", m)
 
 		stdscr.Refresh()
 
@@ -162,13 +157,13 @@ func main() {
 		case gc.KEY_ESC:
 			keepGoing = false
 		case 'k':
-			py = decAndClampToZero(py)
+			px, py = moveIfValid(px, py, 0, -1, &d.M)
 		case 'j':
-			py = incAndClamp(py, height)
+			px, py = moveIfValid(px, py, 0, 1, &d.M)
 		case 'h':
-			px = decAndClampToZero(px)
+			px, py = moveIfValid(px, py, -1, 0, &d.M)
 		case 'l':
-			px = incAndClamp(px, width)
+			px, py = moveIfValid(px, py, 1, 0, &d.M)
 		case 'g':
 			w.currentFloor = generate.GenerateDungeon(opts)
 		}
